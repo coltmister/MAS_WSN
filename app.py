@@ -12,10 +12,11 @@ from flask import request
 from RSA.main import decrypt, encrypt
 
 NODE_ID = 1
+RELAY_NODE = "http://10.132.15.125:5000"
 E = 65537
-IP_ADDRESS = socket.gethostbyname(socket.gethostname())
+IP_ADDRESS = f"http://{socket.gethostbyname(socket.gethostname())}:5000"
 print(f"Текущий IP_ADDRESS {IP_ADDRESS}")
-BASE_STATION_ADDRESS = "http://127.0.0.1:5000"
+BASE_STATION_ADDRESS = "http://10.132.15.125:5000"
 
 with open(f'priv_key{NODE_ID}.txt', 'rb') as f:
     DECODING_KEY = json.loads(base64.b64decode(f.read()))
@@ -28,27 +29,26 @@ app = Flask(__name__)
 @app.cli.command("send_BS")
 @click.argument("payload")
 def send_message_to_BS(payload):
-    data = {
-        "preamble": None,
-        "header": encrypt(f"{IP_ADDRESS}|{datetime.datetime.now()}|REPLY".encode("utf-8"), E,
-                          ENCODING_KEY['n']),
-        "payload": encrypt(payload.encode("utf-8"), E, ENCODING_KEY['n']),
-    }
-    response = requests.post(BASE_STATION_ADDRESS, json=data)
-    data = response.json()
-    try:
-        decrypted_header = decrypt(data['header'], E, DECODING_KEY['p'], DECODING_KEY['q'])
-        decrypted_payload = decrypt(data['payload'], E, DECODING_KEY['p'], DECODING_KEY['q'])
-    except (ValueError, KeyError):
-        # print(response.text)
-        pass
-    try:
-        addr2, nonce, command = decrypted_header.split('|')
-        print("Ответ:", addr2, nonce, command)
-        print("Данные:", decrypted_payload)
-    except (ValueError, KeyError):
-        # print(response.text)
-        pass
+    if RELAY_NODE is not None:
+        data = {
+            "preamble": IP_ADDRESS,
+            "header": encrypt(f"{IP_ADDRESS}|{datetime.datetime.now()}|RELAY".encode("utf-8"), E,
+                              ENCODING_KEY['n']),
+            "payload": {
+                "relay_header": encrypt(f"{IP_ADDRESS}|{datetime.datetime.now()}|SEND-DATA".encode("utf-8"), E,
+                                        ENCODING_KEY['n']),
+                "relay_payload": encrypt(secrets.token_hex(60).encode('utf-8'), E, ENCODING_KEY['n']),
+            }
+        }
+        requests.post(RELAY_NODE, json=data)
+    else:
+        data = {
+            "preamble": IP_ADDRESS,
+            "header": encrypt(f"{IP_ADDRESS}|{datetime.datetime.now()}|REPLY".encode("utf-8"), E,
+                              ENCODING_KEY['n']),
+            "payload": encrypt(payload.encode("utf-8"), E, ENCODING_KEY['n']),
+        }
+        requests.post(BASE_STATION_ADDRESS, json=data)
 
 
 """
@@ -85,16 +85,33 @@ def reply():
             return ErrorResponse('Неверный формат сообщения')
         if data['header'] is None:
             return ErrorResponse('Пустой заголовок')
-        try:
-            decrypted_header = decrypt(data['header'], E, DECODING_KEY['p'], DECODING_KEY['q'])
-        except ValueError:
-            return ErrorResponse('Не удалось расшифровать')
-        try:
-            addr2, nonce, command = decrypted_header.split('|')
-        except ValueError:
-            return ErrorResponse('Неверный формат заголовка')
-        if (datetime.datetime.fromisoformat(nonce) + datetime.timedelta(minutes=1)) < datetime.datetime.now():
-            return ErrorResponse('Старый запрос. Возможно попытка отправить старое сообщение')
+        if data['preamble'] is None:
+            try:
+                decrypted_header = decrypt(data['header'], E, DECODING_KEY['p'], DECODING_KEY['q'])
+            except ValueError:
+                return ErrorResponse('Не удалось расшифровать')
+            try:
+                addr2, nonce, command = decrypted_header.split('|')
+            except ValueError:
+                return ErrorResponse('Неверный формат заголовка')
+            if (datetime.datetime.fromisoformat(nonce) + datetime.timedelta(minutes=1)) < datetime.datetime.now():
+                return ErrorResponse('Старый запрос. Возможно попытка отправить старое сообщение')
+        else:
+            if 'relay_header' not in data['payload'] or 'relay_payload' not in data['payload']:
+                return ErrorResponse('Неверный формата RELAY-сообщения')
+            relay_response = {
+                "preamble": IP_ADDRESS,
+                "header": data['payload']['relay_header'],
+                "payload": data['payload']['relay_payload'],
+            }
+            response = requests.post(BASE_STATION_ADDRESS, json=relay_response)
+            try:
+                if response.json()['status'] == 'success':
+                    return SuccessResponse("Отправка пересылаемого сообщения прошла успешно")
+                else:
+                    return ErrorResponse("Отправка пересылаемого сообщения прошла неудачно")
+            except KeyError or ValueError:
+                return ErrorResponse("Отправка пересылаемого сообщения прошла неудачно")
         if command == 'REPLY':
             if addr2 != IP_ADDRESS:
                 return ErrorResponse('Неверный IP-адрес')
@@ -110,33 +127,30 @@ def reply():
                     "payload": encrypt(secrets.token_hex(60).encode('utf-8'), E, ENCODING_KEY['n']),
                 }
                 return jsonify(reply_response)
-        elif command == 'RELAY':
-            if 'relay_header' not in data['payload'] or 'relay_payload' not in data['payload']:
-                return ErrorResponse('Неверный формата RELAY-сообщения')
-            relay_response = {
-                "preamble": IP_ADDRESS,
-                "header": data['payload']['relay_header'],
-                "payload": data['payload']['relay_payload'],
-            }
-            response = requests.post(addr2, json=relay_response)
-            try:
-                if response.json()['status'] == 'success':
-                    return SuccessResponse("Отправка пересылаемого сообщения прошла успешно")
-                else:
-                    return ErrorResponse("Отправка пересылаемого сообщения прошла неудачно")
-            except KeyError or ValueError:
-                return ErrorResponse("Отправка пересылаемого сообщения прошла неудачно")
         elif command == 'GET-DATA':
-            pass
-        else:
-            return ErrorResponse("Неверная команда")
-    
-    
-    
-    
+            if RELAY_NODE is not None:
+                data = {
+                    "preamble": IP_ADDRESS,
+                    "header": encrypt(f"{IP_ADDRESS}|{datetime.datetime.now()}|RELAY".encode("utf-8"), E,
+                                      ENCODING_KEY['n']),
+                    "payload": {
+                        "relay_header": encrypt(f"{IP_ADDRESS}|{datetime.datetime.now()}|SEND-DATA".encode("utf-8"), E,
+                                                ENCODING_KEY['n']),
+                        "relay_payload": encrypt(secrets.token_hex(60).encode('utf-8'), E, ENCODING_KEY['n']),
+                    }
+                }
+                requests.post(RELAY_NODE, json=data)
+            else:
+                data = {
+                    "preamble": IP_ADDRESS,
+                    "header": encrypt(f"{IP_ADDRESS}|{datetime.datetime.now()}|SEND-DATA".encode("utf-8"), E,
+                                      ENCODING_KEY['n']),
+                    "payload": encrypt(secrets.token_hex(60).encode('utf-8'), E, ENCODING_KEY['n']),
+                }
+                requests.post(BASE_STATION_ADDRESS, json=data)
     else:
-        "None"
+        return ErrorResponse('Неверный метод')
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host='0.0.0.0', port=5000, threaded=True)
