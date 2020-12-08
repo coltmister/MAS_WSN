@@ -14,7 +14,7 @@ from RSA.main import decrypt, encrypt
 NODE_ID = 1
 E = 65537
 IP_ADDRESS = socket.gethostbyname(socket.gethostname())
-print("Текущий IP_ADDRESS {IP_ADDRESS}")
+print(f"Текущий IP_ADDRESS {IP_ADDRESS}")
 BASE_STATION_ADDRESS = "http://127.0.0.1:5000"
 
 with open(f'priv_key{NODE_ID}.txt', 'rb') as f:
