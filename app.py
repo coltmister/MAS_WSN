@@ -35,7 +35,19 @@ def send_message_to_BS(payload):
         "payload": encrypt(payload.encode("utf-8"), E, ENCODING_KEY['n']),
     }
     response = requests.post(BASE_STATION_ADDRESS, json=data)
-    print(response.json())
+    try:
+        decrypted_header = decrypt(data['header'], E, DECODING_KEY['p'], DECODING_KEY['q'])
+        decrypted_payload = decrypt(data['payload'], E, DECODING_KEY['p'], DECODING_KEY['q'])
+    except (ValueError, KeyError):
+        #print(response.text)
+        pass
+    try:
+        addr2, nonce, command = decrypted_header.split('|')
+        print(addr2, nonce, command)
+        print(decrypted_payload)
+    except (ValueError, KeyError):
+        # print(response.text)
+        pass
 
 
 """
@@ -64,7 +76,6 @@ def SuccessResponse(text):
 @app.route('/', methods=['GET', 'POST'])
 def reply():
     if request.method == 'POST':
-        print(request.json)
         data = request.json
         # data = json.loads(request.text)
         if data is None:
