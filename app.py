@@ -35,16 +35,17 @@ def send_message_to_BS(payload):
         "payload": encrypt(payload.encode("utf-8"), E, ENCODING_KEY['n']),
     }
     response = requests.post(BASE_STATION_ADDRESS, json=data)
+    data = response.json()
     try:
         decrypted_header = decrypt(data['header'], E, DECODING_KEY['p'], DECODING_KEY['q'])
         decrypted_payload = decrypt(data['payload'], E, DECODING_KEY['p'], DECODING_KEY['q'])
     except (ValueError, KeyError):
-        #print(response.text)
+        # print(response.text)
         pass
     try:
         addr2, nonce, command = decrypted_header.split('|')
-        print(addr2, nonce, command)
-        print(decrypted_payload)
+        print("Ответ:", addr2, nonce, command)
+        print("Данные:", decrypted_payload)
     except (ValueError, KeyError):
         # print(response.text)
         pass
