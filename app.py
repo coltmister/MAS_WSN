@@ -14,15 +14,13 @@ from RSA.main import decrypt, encrypt
 NODE_ID = 1
 E = 65537
 IP_ADDRESS = socket.gethostbyname(socket.gethostname())
-print(IP_ADDRESS)
+print("Текущий IP_ADDRESS {IP_ADDRESS}")
 BASE_STATION_ADDRESS = "http://127.0.0.1:5000"
 
 with open(f'priv_key{NODE_ID}.txt', 'rb') as f:
     DECODING_KEY = json.loads(base64.b64decode(f.read()))
-    print(DECODING_KEY)
 with open(f'pub_key{NODE_ID}.txt', 'rb') as f:
     ENCODING_KEY = json.loads(base64.b64decode(f.read()))
-    print(ENCODING_KEY)
 
 app = Flask(__name__)
 
