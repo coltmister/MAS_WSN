@@ -2,7 +2,6 @@ import base64
 import datetime
 import json
 import secrets
-import socket
 from backports.datetime_fromisoformat import MonkeyPatch
 MonkeyPatch.patch_fromisoformat()
 import requests
@@ -12,11 +11,11 @@ from flask import request
 from RSA.main import decrypt, encrypt
 
 NODE_ID = 2
-# RELAY_NODE = "http://10.132.15.125:5000"
-RELAY_NODE = None
+RELAY_NODE = "http://192.168.31.74:5000"
+# RELAY_NODE = None
 E = 65537
-#IP_ADDRESS = f"http://{socket.gethostbyname(socket.gethostname())}:5000"
-IP_ADDRESS="http://192.168.31.74:5000"
+# IP_ADDRESS = f"http://{socket.gethostbyname(socket.gethostname())}:5000"
+IP_ADDRESS = "http://192.168.31.74:5000"
 print(f"Текущий IP_ADDRESS {IP_ADDRESS}")
 BASE_STATION_ADDRESS = "http://192.168.31.245:5000"
 
@@ -166,6 +165,21 @@ def reply():
                 }
                 requests.post(BASE_STATION_ADDRESS, json=data)
             return SuccessResponse("Отправка ответного сообщения прошла успешно")
+        if 'relay_header' not in data['payload'] or 'relay_payload' not in data['payload']:
+            return ErrorResponse('Неверный формата RELAY-сообщения')
+        relay_response = {
+            "preamble": data['preamble'],
+            "header": data['payload']['relay_header'],
+            "payload": data['payload']['relay_payload'],
+        }
+        response = requests.post(addr2, json=relay_response)
+        try:
+            if response.json()['status'] == 'success':
+                return SuccessResponse("Отправка пересылаемого сообщения прошла успешно")
+            else:
+                return ErrorResponse("Отправка пересылаемого сообщения прошла неудачно")
+        except KeyError or ValueError:
+            return ErrorResponse("Отправка пересылаемого сообщения прошла неудачно")
     else:
         return ErrorResponse('Неверный метод')
 
