@@ -2,7 +2,8 @@ import base64
 import datetime
 import json
 import socket
-
+from backports.datetime_fromisoformat import MonkeyPatch
+MonkeyPatch.patch_fromisoformat()
 import click
 import requests
 from flask import Flask, jsonify
@@ -19,7 +20,7 @@ print(f"Текущий IP_ADDRESS {IP_ADDRESS}")
 # with open(f'pub_key{NODE_ID}.txt', 'rb') as f:
 #     ENCODING_KEY = json.loads(base64.b64decode(f.read()))
 NODES = [
-    {'id': 1, "self": True, "address": "http://10.132.15.125:5000"},
+    {'id': 1, "self": True, "address": "http://10.132.15.43:5000"},
     {'id': 2, "self": False, "address": "http://10.132.15.125:5000", "relay": 'http://10.132.15.125:5000'},
 ]
 
@@ -32,7 +33,7 @@ app = Flask(__name__)
 def send_message_to_node(command, node_id):
     NODE = None
     for node in NODES:
-        if node['id'] == node_id:
+        if node['id'] == int(node_id):
             NODE = node
             break
     
@@ -142,4 +143,4 @@ def reply():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, threaded=True)
+    app.run(host='10.132.15.56', port=5000, threaded=True)
