@@ -3,9 +3,6 @@ import json
 
 from RSA.main import generateKeys
 
-# print(f"Закрытая пара d|n: {d}|{n}")
-# print(f"Открытая пара e|n: {e}|{n}")
-
 for i in range(5):
     e, d, n, p, q = generateKeys()
     with open(f'priv_key{i}.txt', 'wb') as f:

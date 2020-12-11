@@ -2,22 +2,21 @@ import base64
 import datetime
 import json
 import secrets
-from backports.datetime_fromisoformat import MonkeyPatch
-MonkeyPatch.patch_fromisoformat()
+# from backports.datetime_fromisoformat import MonkeyPatch
+# MonkeyPatch.patch_fromisoformat()
+import socket
+
 import requests
 from flask import Flask, jsonify
 from flask import request
 
 from RSA.main import decrypt, encrypt
 
-NODE_ID = 2
-RELAY_NODE = "http://192.168.31.74:5000"
-# RELAY_NODE = None
+NODE_ID = 1
+RELAY_NODE = "IP-ADDRESS OF THE RELAY NODE"
 E = 65537
-# IP_ADDRESS = f"http://{socket.gethostbyname(socket.gethostname())}:5000"
-IP_ADDRESS = "http://192.168.31.74:5000"
-print(f"Текущий IP_ADDRESS {IP_ADDRESS}")
-BASE_STATION_ADDRESS = "http://192.168.31.245:5000"
+IP_ADDRESS = f"http://{socket.gethostbyname(socket.gethostname())}:5000"
+BASE_STATION_ADDRESS = "IP-ADDRESS OF THEN BASE STATION"
 
 with open(f'priv_key{NODE_ID}.txt', 'rb') as f:
     DECODING_KEY = json.loads(base64.b64decode(f.read()))
@@ -51,15 +50,6 @@ def send_message_to_BS():
         requests.post(BASE_STATION_ADDRESS, json=data)
 
 
-"""
-{
-"preamble": "ADDR1/None",
-"header:"ENCODED", // ADDR2/DTG/COMMAND
-"payload": "ENCODED"// DATA
-}
-"""
-
-
 def ErrorResponse(message):
     print(message)
     return jsonify({"status": 'error', "message": message})
@@ -78,7 +68,6 @@ def SuccessResponse(text):
 def reply():
     if request.method == 'POST':
         data = request.json
-        # data = json.loads(request.text)
         if data is None:
             return ErrorResponse('Ошибка при декодировании сообщения')
         if 'preamble' not in data or 'header' not in data or 'payload' not in data:
@@ -105,7 +94,6 @@ def reply():
                 "payload": data['payload']['relay_payload'],
             }
             response = requests.post(BASE_STATION_ADDRESS, json=relay_response)
-            print(response.text)
             try:
                 if response.json()['status'] == 'success':
                     return SuccessResponse("Отправка пересылаемого сообщения прошла успешно")
@@ -185,4 +173,4 @@ def reply():
 
 
 if __name__ == '__main__':
-    app.run(host='192.168.31.74', port=5000, threaded=True)
+    app.run(host='0.0.0.0', port=5000, threaded=True)

@@ -13,15 +13,15 @@ from RSA.main import decrypt, encrypt
 
 E = 65537
 IP_ADDRESS = f"http://{socket.gethostbyname(socket.gethostname())}:5000"
-print(f"Текущий IP_ADDRESS {IP_ADDRESS}")
-
-# with open(f'priv_key{NODE_ID}.txt', 'rb') as f:
-#     DECODING_KEY = json.loads(base64.b64decode(f.read()))
-# with open(f'pub_key{NODE_ID}.txt', 'rb') as f:
-#     ENCODING_KEY = json.loads(base64.b64decode(f.read()))
 NODES = [
-    {'id': 1, "self": True, "address": "http://10.132.15.43:5000"},
-    {'id': 2, "self": False, "address": "http://10.132.15.125:5000", "relay": 'http://10.132.15.125:5000'},
+    {'id': 1, "self": False,
+     "address": "http://10.132.15.43:5000",
+     "relay": 'http://10.132.15.125:5000',
+     "relay_id": 2,
+     },
+    {'id': 2,
+     "self": True,
+     "address": "http://10.132.15.125:5000"},
 ]
 
 app = Flask(__name__)
@@ -41,19 +41,19 @@ def send_message_to_node(command, node_id):
         print("Данный узел не найден")
         exit(0)
     else:
-        with open(f'priv_key{NODE["id"]}.txt', 'rb') as f:
-            DECODING_KEY = json.loads(base64.b64decode(f.read()))
         with open(f'pub_key{NODE["id"]}.txt', 'rb') as f:
-            ENCODING_KEY = json.loads(base64.b64decode(f.read()))
+            ENCODING_KEY_NODE = json.loads(base64.b64decode(f.read()))
         if not NODE['self']:
+            with open(f'pub_key{NODE["relay_id"]}.txt', 'rb') as f:
+                ENCODING_KEY_RELAY = json.loads(base64.b64decode(f.read()))
             data = {
                 "preamble": None,
-                "header": encrypt(f"{NODE['relay']}|{datetime.datetime.now()}|RELAY".encode("utf-8"), E,
-                                  ENCODING_KEY['n']),
+                "header": encrypt(f"{NODE['address']}|{datetime.datetime.now()}|RELAY".encode("utf-8"), E,
+                                  ENCODING_KEY_RELAY['n']),
                 "payload": {
                     "relay_header": encrypt(
                         f"{NODE['address']}|{datetime.datetime.now()}|{command}".encode("utf-8"), E,
-                        ENCODING_KEY['n']),
+                        ENCODING_KEY_NODE['n']),
                     "relay_payload": None,
                 }
             }
@@ -62,19 +62,10 @@ def send_message_to_node(command, node_id):
             data = {
                 "preamble": None,
                 "header": encrypt(f"{NODE['address']}|{datetime.datetime.now()}|{command}".encode("utf-8"), E,
-                                  ENCODING_KEY['n']),
+                                  ENCODING_KEY_NODE['n']),
                 "payload": None,
             }
             requests.post(NODE['address'], json=data)
-
-
-"""
-{
-"preamble": "ADDR1/None",
-"header:"ENCODED", // ADDR2/DTG/COMMAND
-"payload": "ENCODED"// DATA
-}
-"""
 
 
 def ErrorResponse(message):
@@ -95,7 +86,6 @@ def SuccessResponse(text):
 def reply():
     if request.method == 'POST':
         data = request.json
-        # data = json.loads(request.text)
         if data is None:
             return ErrorResponse('Ошибка при декодировании сообщения')
         if 'preamble' not in data or 'header' not in data or 'payload' not in data:
@@ -112,8 +102,6 @@ def reply():
                 return ErrorResponse('Данный узел не найден')
             with open(f'priv_key{NODE["id"]}.txt', 'rb') as f:
                 DECODING_KEY = json.loads(base64.b64decode(f.read()))
-            with open(f'pub_key{NODE["id"]}.txt', 'rb') as f:
-                ENCODING_KEY = json.loads(base64.b64decode(f.read()))
             decrypted_header = decrypt(data['header'], E, DECODING_KEY['p'], DECODING_KEY['q'])
         except ValueError:
             return ErrorResponse('Не удалось расшифровать')
@@ -127,14 +115,13 @@ def reply():
             try:
                 decrypted_payload = decrypt(data['payload'], E, DECODING_KEY['p'], DECODING_KEY['q'])
             except (ValueError, KeyError):
-                print("ОШИБКА")
+                print("Не удалось расшифровать")
             try:
                 addr2, nonce, command = decrypted_header.split('|')
                 print("Ответ:", addr2, nonce, command)
                 print("Данные:", decrypted_payload)
                 return SuccessResponse("Получение сообщения прошло успешно")
             except (ValueError, KeyError):
-                # print(response.text)
                 return ErrorResponse("Неверный формат сообщения")
         else:
             return ErrorResponse("Неверная команда")
@@ -143,4 +130,4 @@ def reply():
 
 
 if __name__ == '__main__':
-    app.run(host='10.132.15.56', port=5000, threaded=True)
+    app.run(host='0.0.0.0', port=5000, threaded=True)
