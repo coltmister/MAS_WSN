@@ -4,7 +4,6 @@ import json
 import secrets
 import socket
 
-import click
 import requests
 from flask import Flask, jsonify
 from flask import request
@@ -12,11 +11,12 @@ from flask import request
 from RSA.main import decrypt, encrypt
 
 NODE_ID = 1
-RELAY_NODE = "http://10.132.15.125:5000"
+# RELAY_NODE = "http://10.132.15.125:5000"
+RELAY_NODE = None
 E = 65537
 IP_ADDRESS = f"http://{socket.gethostbyname(socket.gethostname())}:5000"
 print(f"Текущий IP_ADDRESS {IP_ADDRESS}")
-BASE_STATION_ADDRESS = "http://10.132.15.125:5000"
+BASE_STATION_ADDRESS = "http://10.132.15.56:5000"
 
 with open(f'priv_key{NODE_ID}.txt', 'rb') as f:
     DECODING_KEY = json.loads(base64.b64decode(f.read()))
@@ -27,8 +27,7 @@ app = Flask(__name__)
 
 
 @app.cli.command("send_BS")
-@click.argument("payload")
-def send_message_to_BS(payload):
+def send_message_to_BS():
     if RELAY_NODE is not None:
         data = {
             "preamble": IP_ADDRESS,
@@ -44,9 +43,9 @@ def send_message_to_BS(payload):
     else:
         data = {
             "preamble": IP_ADDRESS,
-            "header": encrypt(f"{IP_ADDRESS}|{datetime.datetime.now()}|REPLY".encode("utf-8"), E,
+            "header": encrypt(f"{IP_ADDRESS}|{datetime.datetime.now()}|SEND-DATA".encode("utf-8"), E,
                               ENCODING_KEY['n']),
-            "payload": encrypt(payload.encode("utf-8"), E, ENCODING_KEY['n']),
+            "payload": encrypt(secrets.token_hex(60).encode('utf-8'), E, ENCODING_KEY['n']),
         }
         requests.post(BASE_STATION_ADDRESS, json=data)
 
@@ -118,16 +117,31 @@ def reply():
             if data['preamble'] is not None:
                 return SuccessResponse("Получение пересланного сообщения прошло успешно")
             else:
-                reply_response = {
-                    "preamble": IP_ADDRESS,
-                    "header": encrypt(
-                        f"{IP_ADDRESS}|{datetime.datetime.now().isoformat()}|REPLY-RESPONSE".encode('utf-8'),
-                        E,
-                        ENCODING_KEY['n']),
-                    "payload": encrypt(secrets.token_hex(60).encode('utf-8'), E, ENCODING_KEY['n']),
-                }
-                return jsonify(reply_response)
+                if RELAY_NODE is not None:
+                    data = {
+                        "preamble": IP_ADDRESS,
+                        "header": encrypt(f"{IP_ADDRESS}|{datetime.datetime.now()}|RELAY".encode("utf-8"), E,
+                                          ENCODING_KEY['n']),
+                        "payload": {
+                            "relay_header": encrypt(
+                                f"{IP_ADDRESS}|{datetime.datetime.now().isoformat()}|REPLY-RESPONSE".encode('utf-8'),
+                                E,
+                                ENCODING_KEY['n']),
+                            "relay_payload": encrypt(secrets.token_hex(60).encode('utf-8'), E, ENCODING_KEY['n']),
+                        }
+                    }
+                    requests.post(RELAY_NODE, json=data)
+                else:
+                    data = {
+                        "preamble": IP_ADDRESS,
+                        "header": encrypt(f"{IP_ADDRESS}|{datetime.datetime.now()}|REPLY-RESPONSE".encode("utf-8"), E,
+                                          ENCODING_KEY['n']),
+                        "payload": encrypt(secrets.token_hex(60).encode('utf-8'), E, ENCODING_KEY['n']),
+                    }
+                    requests.post(BASE_STATION_ADDRESS, json=data)
+                return SuccessResponse("Отправка ответного сообщения прошла успешно")
         elif command == 'GET-DATA':
+            print("Полученная команда:", addr2, nonce, command)
             if RELAY_NODE is not None:
                 data = {
                     "preamble": IP_ADDRESS,
@@ -148,6 +162,7 @@ def reply():
                     "payload": encrypt(secrets.token_hex(60).encode('utf-8'), E, ENCODING_KEY['n']),
                 }
                 requests.post(BASE_STATION_ADDRESS, json=data)
+            return SuccessResponse("Отправка ответного сообщения прошла успешно")
     else:
         return ErrorResponse('Неверный метод')
 

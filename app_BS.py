@@ -123,7 +123,7 @@ def reply():
             return ErrorResponse('Неверный формат заголовка')
         if (datetime.datetime.fromisoformat(nonce) + datetime.timedelta(minutes=1)) < datetime.datetime.now():
             return ErrorResponse('Старый запрос. Возможно попытка отправить старое сообщение')
-        elif command == 'SEND-DATA':
+        elif command == 'SEND-DATA' or command == 'REPLY-RESPONSE':
             try:
                 decrypted_payload = decrypt(data['payload'], E, DECODING_KEY['p'], DECODING_KEY['q'])
             except (ValueError, KeyError):
