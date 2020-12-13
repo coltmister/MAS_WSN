@@ -18,7 +18,7 @@ E = 65537
 IP_ADDRESS = f"http://{socket.gethostbyname(socket.gethostname())}:5000"
 BASE_STATION_ADDRESS = "IP-ADDRESS OF THEN BASE STATION"
 
-with open(f'priv_key{NODE_ID}.txt', 'rb') as f:
+with open(f'priv_key1.txt', 'rb') as f:
     DECODING_KEY = json.loads(base64.b64decode(f.read()))
 with open(f'pub_key{NODE_ID}.txt', 'rb') as f:
     ENCODING_KEY = json.loads(base64.b64decode(f.read()))
